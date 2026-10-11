@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  background: #fbfaf5;
+  color: #0b2545;
+  font-family: "Atkinson Hyperlegible", sans-serif;
+}
+
+.chart-grid {
+  background-color: #f2e6c4;
+  background-image:
+    linear-gradient(to right, #e0d2a8 1px, transparent 1px),
+    linear-gradient(to bottom, #e0d2a8 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+:focus-visible {
+  outline: 3px solid #1f5a8a;
+  outline-offset: 2px;
+}
+
+mark {
+  background: #f8e6f2;
+  color: #6e0e55;
+}

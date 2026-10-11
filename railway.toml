@@ -1,0 +1,15 @@
+# Railway services share this repository. Set the root directory to the repo
+# and use one service per process:
+#   API    start: pnpm --filter @referendum/api start     health: /health     port: 3000
+#   Worker start: pnpm --filter @referendum/worker start health: /health     port: 3002
+#   Web    start: pnpm --filter @referendum/web start    port: 5173
+# Build command for each: pnpm install && pnpm --filter @referendum/db generate && pnpm build
+# Postgres needs pgvector and postgis. Redis is required. Set QUEUE_MODE=bull in production.
+
+[build]
+buildCommand = "pnpm install && pnpm --filter @referendum/db generate && pnpm --filter @referendum/api... build && pnpm --filter @referendum/embeds build"
+
+[deploy]
+startCommand = "pnpm --filter @referendum/api start"
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"

@@ -1,0 +1,23 @@
+{
+  "meetings": [
+    {
+      "bodyCode": "ASM",
+      "startsAt": "2026-06-03T16:00:00.000Z",
+      "location": "[DEMO] Assembly chambers",
+      "items": [
+        {
+          "position": "7.a",
+          "title": "[DEMO] Sample archive noise curfew",
+          "type": "PUBLIC_HEARING",
+          "documents": [
+            {
+              "title": "Staff report",
+              "kind": "staff_report",
+              "text": "This sample archive staff report says the demo ordinance adopts a noise curfew of 10 p.m. in the imported packet. The curfew applies to amplified sound on public docks."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
