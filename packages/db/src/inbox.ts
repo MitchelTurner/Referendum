@@ -124,6 +124,27 @@ export async function needsYou(actor: StaffActor): Promise<InboxRow[]> {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
+    const recordsGovernments = actor.memberships
+      .filter((membership) => membership.role === 'ADMIN' || membership.role === 'CLERK' || membership.role === 'DEPUTY_CLERK')
+      .map((membership) => membership.governmentId);
+    if (recordsGovernments.length > 0) {
+      const requests = await tx.recordsRequest.findMany({
+        where: { status: { in: ['RECEIVED', 'IN_PROGRESS', 'NEED_INFO'] }, governmentId: { in: recordsGovernments } },
+        orderBy: { receivedAt: 'asc' },
+        take: 50,
+      });
+      for (const request of requests) {
+        rows.push({
+          id: `records:${request.id}`,
+          dueAt: (request.dueAt ?? request.receivedAt).toISOString(),
+          dueLabel: request.dueAt ? 'Records response due' : 'Response deadline not configured',
+          title: request.trackingNumber,
+          context: request.description.slice(0, 140),
+          href: `/staff/records?request=${request.id}`,
+          action: 'Open request',
+        });
+      }
+    }
     for (const failure of failures) {
       rows.push({
         id: `job:${failure.id}`,

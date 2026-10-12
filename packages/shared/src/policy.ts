@@ -23,6 +23,8 @@ export const ACTIONS = [
   'staffquestion.ask',
   'record.read',
   'data.export',
+  // SPEC-GAP: §5 has no records-request row. Clerks and deputies run intake; viewers do not see requester contact details.
+  'records.manage',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -65,6 +67,8 @@ export function can(input: {
       return true;
     case 'data.export':
       return role === 'ADMIN';
+    case 'records.manage':
+      return role === 'ADMIN' || role === 'CLERK' || role === 'DEPUTY_CLERK';
     default:
       return false;
   }

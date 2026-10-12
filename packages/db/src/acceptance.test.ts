@@ -442,6 +442,53 @@ describe('acceptance', () => {
     expect(adopted.text).not.toContain('SECRET DRAFT MOTION');
   });
 
+  it('keeps unpublished records private and leaves the deadline unconfigured', async () => {
+    const { fileRecordsRequest, listPublishedRecords, listRecords, trackRecordsRequest, addRecordsRelease, updateRecordsRequest, publishRecordsRequest } = await import('./records');
+    const governments = await withTenant({ governmentIds: 'all' }, (tx) => tx.government.findMany());
+    const borough = governments.find((government) => government.shortName === 'Borough');
+    const city = governments.find((government) => government.shortName === 'City');
+    if (!borough || !city) throw new Error('seed missing');
+    const filed = await fileRecordsRequest({
+      governmentId: borough.id,
+      name: '[DEMO] Records Requester',
+      email: 'records.demo@referendum.local',
+      description: '[DEMO] Harbor moorage ledgers for 2024.',
+      turnstileToken: 'test-pass',
+      ip: 'records-test',
+    });
+    expect(filed.deadlineConfigured).toBe(false);
+    expect(filed.dueAt).toBeNull();
+    const cityClerk = await provisionStaff({
+      email: 'records.city.clerk@test.local',
+      name: 'Records City Clerk',
+      password: 'Demo-password-1',
+      totpSecret: 'JBSWY3DPEHPK3PXP',
+      memberships: [{ governmentId: city.id, role: 'CLERK' }],
+    });
+    const cityQueue = await listRecords(cityClerk.actor);
+    expect(cityQueue.some((request) => request.trackingNumber === filed.trackingNumber)).toBe(false);
+    const boroughClerk = await provisionStaff({
+      email: 'records.borough.clerk@test.local',
+      name: 'Records Borough Clerk',
+      password: 'Demo-password-1',
+      totpSecret: 'JBSWY3DPEHPK3PXP',
+      memberships: [{ governmentId: borough.id, role: 'CLERK' }],
+    });
+    const boroughActor = boroughClerk.actor;
+    const queue = await listRecords(boroughActor);
+    const request = queue.find((row) => row.trackingNumber === filed.trackingNumber);
+    if (!request) throw new Error('request missing');
+    await addRecordsRelease(boroughActor, request.id, { title: 'Ledgers', body: '[DEMO] The 2024 ledger extract.' });
+    expect((await listPublishedRecords()).some((row) => row.trackingNumber === filed.trackingNumber)).toBe(false);
+    const hidden = await trackRecordsRequest(filed.trackingNumber, 'records.demo@referendum.local');
+    expect(hidden.releases).toEqual([]);
+    await updateRecordsRequest(boroughActor, request.id, { status: 'FULFILLED' });
+    await publishRecordsRequest(boroughActor, request.id);
+    const published = await listPublishedRecords(borough.id);
+    expect(published.some((row) => row.releases.some((release) => release.body.includes('2024 ledger')))).toBe(true);
+    expect(JSON.stringify(published)).not.toContain('records.demo@referendum.local');
+  });
+
   it('imports a sample archive into searchable pages', async () => {
     const { askPackets } = await import('./ask');
     const borough = await withTenant({ governmentIds: 'all' }, (tx) =>

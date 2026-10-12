@@ -34,6 +34,10 @@ describe('policy', () => {
     expect(can({ role: 'ADMIN', action: 'data.export' })).toBe(true);
     expect(can({ role: 'CLERK', action: 'data.export' })).toBe(false);
     expect(can({ role: 'VIEWER', action: 'record.read' })).toBe(true);
+    expect(can({ role: 'CLERK', action: 'records.manage' })).toBe(true);
+    expect(can({ role: 'DEPUTY_CLERK', action: 'records.manage' })).toBe(true);
+    expect(can({ role: 'VIEWER', action: 'records.manage' })).toBe(false);
+    expect(can({ role: 'STAFF', action: 'records.manage' })).toBe(false);
     expect(can({ role: 'VIEWER', action: 'item.edit' })).toBe(false);
   });
 });

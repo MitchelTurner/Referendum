@@ -14,6 +14,8 @@ export async function exportGovernment(actor: StaffActor, governmentId: string):
         matters: { include: { events: true } },
         noticeRules: true,
         modules: true,
+        recordsRule: true,
+        recordsRequests: { include: { releases: true } },
       },
     });
     const audit = await tx.auditLog.findMany({ where: { governmentId }, take: 1000 });

@@ -14,7 +14,9 @@ pnpm dev
 
 Demo staff login after `pnpm seed:demo`: `clerk.borough@demo.referendum.local` / `Demo-password-1`. The authenticator secret seeded for that account is `JBSWY3DPEHPK3PXP`.
 
-Jurisdiction-specific notice periods, code citations, and retention schedules are configuration. Seeded values that are not yet confirmed from code say `TBD` and the product shows “rule not configured”.
+Jurisdiction-specific notice periods, code citations, retention schedules, and public-records response deadlines are configuration. Seeded values that are not yet confirmed from code say `TBD`. The product shows that the rule or response deadline is not configured.
+
+Public records requests are the phase after meetings: file a request with one government, track it with the number and email, and read a response only after staff publish it.
 
 ## Restore drill
 
