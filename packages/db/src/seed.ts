@@ -94,6 +94,16 @@ export async function seedFoundation() {
           },
         });
       }
+      const recordsRule = await tx.recordsRule.findUnique({ where: { governmentId: row.id } });
+      if (!recordsRule) {
+        await tx.recordsRule.create({
+          data: {
+            governmentId: row.id,
+            daysToRespond: null,
+            citation: 'Public records response period § TBD',
+          },
+        });
+      }
     }
     return region;
   });

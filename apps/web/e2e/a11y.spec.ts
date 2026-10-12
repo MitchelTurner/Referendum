@@ -8,7 +8,7 @@ async function expectClean(page: import('@playwright/test').Page) {
 }
 
 test('public routes pass axe', async ({ page }) => {
-  for (const path of ['/', '/data', '/follow', '/notices', '/account', '/staff']) {
+  for (const path of ['/', '/data', '/records', '/follow', '/notices', '/account', '/staff']) {
     await page.goto(path);
     await expectClean(page);
   }

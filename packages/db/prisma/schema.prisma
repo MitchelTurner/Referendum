@@ -115,6 +115,16 @@ enum Lang {
   ES
 }
 
+// SPEC-GAP: Phase 2 records statuses are an intake workflow. The original spec named the module and not the states.
+enum RecordsStatus {
+  RECEIVED
+  IN_PROGRESS
+  NEED_INFO
+  FULFILLED
+  DENIED
+  WITHDRAWN
+}
+
 model Region {
   id          String       @id @default(cuid())
   name        String
@@ -146,6 +156,8 @@ model Government {
   auditLogs              AuditLog[]
   outboundMessages       OutboundMessage[]
   jobFailures            JobFailure[]
+  recordsRule            RecordsRule?
+  recordsRequests        RecordsRequest[]
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -510,6 +522,7 @@ model Resident {
   speakers      SpeakerSignup[]
   applications  BoardApplication[]
   sessions      Session[]
+  recordsRequests RecordsRequest[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -640,6 +653,8 @@ model User {
   answeredQuestions  StaffQuestion[] @relation("QuestionAnswerer")
   reviewedTranslations Translation[] @relation("TranslationReviewer")
   approvedSummaries  Matter[]     @relation("SummaryApprover")
+  assignedRecords    RecordsRequest[] @relation("RecordsAssignee")
+  authoredReleases   RecordsRelease[] @relation("ReleaseAuthor")
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 }
@@ -676,6 +691,58 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([governmentId, at])
+}
+
+// SPEC-GAP: response deadlines are configuration. daysToRespond stays null until a government confirms its code.
+model RecordsRule {
+  id            String     @id @default(cuid())
+  governmentId  String     @unique
+  government    Government @relation(fields: [governmentId], references: [id])
+  daysToRespond Int?
+  citation      String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model RecordsRequest {
+  id               String         @id @default(cuid())
+  governmentId     String
+  government       Government     @relation(fields: [governmentId], references: [id])
+  trackingNumber   String
+  requesterName    String
+  requesterEmail   String
+  description      String
+  status           RecordsStatus  @default(RECEIVED)
+  receivedAt       DateTime       @default(now())
+  dueAt            DateTime?
+  closedAt         DateTime?
+  residentId       String?
+  resident         Resident?      @relation(fields: [residentId], references: [id])
+  assigneeUserId   String?
+  assignee         User?          @relation("RecordsAssignee", fields: [assigneeUserId], references: [id])
+  publishedAt      DateTime?
+  denialReason     String?
+  releases         RecordsRelease[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([governmentId, trackingNumber])
+  @@index([governmentId, status])
+}
+
+model RecordsRelease {
+  id               String         @id @default(cuid())
+  requestId        String
+  request          RecordsRequest @relation(fields: [requestId], references: [id])
+  title            String
+  body             String
+  published        Boolean        @default(false)
+  authoredByUserId String?
+  author           User?          @relation("ReleaseAuthor", fields: [authoredByUserId], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([requestId])
 }
 
 model ImportJob {

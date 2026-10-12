@@ -4,6 +4,9 @@ import {
   addComment,
   applyForSeat,
   askPackets,
+  fileRecordsRequest,
+  listPublishedRecords,
+  trackRecordsRequest,
   confirmSubscription,
   createSubscription,
   deleteSubscription,
@@ -21,7 +24,7 @@ import {
   readUnsubscribeToken,
   signUpSpeaker,
 } from '@referendum/db';
-import { applicationSchema, askSchema, commentSchema, speakerSchema, subscriptionSchema } from '@referendum/shared';
+import { applicationSchema, askSchema, commentSchema, recordsFileSchema, speakerSchema, subscriptionSchema } from '@referendum/shared';
 import type { Request, Response } from 'express';
 import { clientIp, optionalResident, parseBody } from './common';
 
@@ -138,6 +141,23 @@ export class PublicController {
     const input = parseBody(applicationSchema, body);
     const residentId = await optionalResident(req);
     return applyForSeat({ ...input, residentId });
+  }
+
+  @Post('records')
+  async fileRecords(@Body() body: unknown, @Req() req: Request) {
+    const input = parseBody(recordsFileSchema, body);
+    const residentId = await optionalResident(req);
+    return fileRecordsRequest({ ...input, residentId, ip: clientIp(req) });
+  }
+
+  @Get('records/track')
+  trackRecords(@Query('trackingNumber') trackingNumber: string, @Query('email') email: string) {
+    return trackRecordsRequest(trackingNumber ?? '', email ?? '');
+  }
+
+  @Get('records/published')
+  publishedRecords(@Query('governmentId') governmentId?: string) {
+    return listPublishedRecords(governmentId);
   }
 
   @Get('live')

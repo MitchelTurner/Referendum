@@ -6,7 +6,7 @@ import { ApiError, api, type Region } from './api';
 
 type Actor = { id: string; email: string; name: string; memberships: { governmentId: string; role: string }[] };
 
-function useActor() {
+export function useActor() {
   return useQuery({ queryKey: ['me'], queryFn: () => api<Actor>('/auth/staff/me'), retry: false });
 }
 

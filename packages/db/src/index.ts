@@ -19,6 +19,7 @@ export * from './boards';
 export * from './imports';
 export * from './export';
 export * from './matters';
+export * from './records';
 export * from './reset';
 export * from './storage';
 export * from './pdf';
