@@ -38,6 +38,12 @@ import {
   nudgeReview,
   patchMotion,
   publishPacket,
+  publishRecordsRequest,
+  addRecordsRelease,
+  getRecordsRequest,
+  listRecords,
+  updateRecordsRequest,
+  upsertRecordsRule,
   recordVotes,
   reviewTranslation,
   scopeFor,
@@ -66,6 +72,9 @@ import {
   noticeRuleSchema,
   paginate,
   personSchema,
+  recordsReleaseSchema,
+  recordsRuleSchema,
+  recordsUpdateSchema,
   reviewDecisionSchema,
   seatSchema,
   staffQuestionSchema,
@@ -386,6 +395,44 @@ export class StaffController {
   @Get('imports')
   async imports(@Req() req: Request) {
     return listImports(await requireStaff(req));
+  }
+
+  @Get('records')
+  @RequiresModule('RECORDS')
+  async records(@Req() req: Request) {
+    return listRecords(await requireStaff(req));
+  }
+
+  @Get('records/:id')
+  @RequiresModule('RECORDS')
+  async record(@Req() req: Request, @Param('id') id: string) {
+    return getRecordsRequest(await requireStaff(req), id);
+  }
+
+  @Patch('records/:id')
+  @RequiresModule('RECORDS')
+  async patchRecord(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
+    const input = parseBody(recordsUpdateSchema, body);
+    return updateRecordsRequest(await requireStaff(req), id, input);
+  }
+
+  @Post('records/:id/releases')
+  @RequiresModule('RECORDS')
+  async release(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
+    const input = parseBody(recordsReleaseSchema, body);
+    return addRecordsRelease(await requireStaff(req), id, input);
+  }
+
+  @Post('records/:id/publish')
+  @RequiresModule('RECORDS')
+  async publishRecord(@Req() req: Request, @Param('id') id: string) {
+    return publishRecordsRequest(await requireStaff(req), id);
+  }
+
+  @Post('records-rules')
+  async recordsRule(@Req() req: Request, @Body() body: unknown) {
+    const input = parseBody(recordsRuleSchema, body);
+    return upsertRecordsRule(await requireStaff(req), input);
   }
 
   @Get('compliance')

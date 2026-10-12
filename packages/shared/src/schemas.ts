@@ -204,6 +204,31 @@ export const staffQuestionSchema = z.object({
   question: z.string().min(1),
 });
 
+export const recordsFileSchema = z.object({
+  governmentId: z.string().min(1),
+  name: z.string().min(1).max(200),
+  email: z.string().email(),
+  description: z.string().min(1).max(8000),
+  turnstileToken: z.string().min(1),
+});
+
+export const recordsUpdateSchema = z.object({
+  status: z.enum(['RECEIVED', 'IN_PROGRESS', 'NEED_INFO', 'FULFILLED', 'DENIED', 'WITHDRAWN']).optional(),
+  assigneeUserId: z.string().nullable().optional(),
+  denialReason: z.string().nullable().optional(),
+});
+
+export const recordsReleaseSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(20000),
+});
+
+export const recordsRuleSchema = z.object({
+  governmentId: z.string().min(1),
+  daysToRespond: z.number().int().min(0).max(365).nullable().optional(),
+  citation: z.string().nullable().optional(),
+});
+
 export const motionPatchSchema = z.object({
   text: z.string().min(1).optional(),
   result: z.enum(['carried', 'failed', 'withdrawn']).optional(),

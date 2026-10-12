@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { api, type CalendarMeeting, type Region } from './api';
 import { AccountPage, DataPage, FollowPage, HomePage, ItemPage, MatterPage, MeetingPage, NoticesPage } from './public-pages';
+import { RecordsPage, StaffRecordsPage } from './records-pages';
 import {
   BoardsPage,
   CompliancePage,
@@ -35,6 +36,7 @@ function Shell({ children, staff = false }: { children: React.ReactNode; staff?:
             {staff ? (
               <>
                 <NavLink className="min-h-11 inline-flex items-center" to="/staff">Inbox</NavLink>
+                <NavLink className="min-h-11 inline-flex items-center" to="/staff/records">Records</NavLink>
                 <NavLink className="min-h-11 inline-flex items-center" to="/staff/boards">Boards</NavLink>
                 <NavLink className="min-h-11 inline-flex items-center" to="/staff/insights">Insights</NavLink>
                 <NavLink className="min-h-11 inline-flex items-center" to="/staff/compliance">Compliance</NavLink>
@@ -43,6 +45,7 @@ function Shell({ children, staff = false }: { children: React.ReactNode; staff?:
               </>
             ) : (
               <>
+                <NavLink className="min-h-11 inline-flex items-center" to="/records">Records</NavLink>
                 <NavLink className="min-h-11 inline-flex items-center" to="/follow">Follow</NavLink>
                 <NavLink className="min-h-11 inline-flex items-center" to="/notices">Notices</NavLink>
                 <NavLink className="min-h-11 inline-flex items-center" to="/account">Account</NavLink>
@@ -101,6 +104,7 @@ export function App() {
       { id: 'home', label: 'Public home', onSelect: () => navigate('/') },
       { id: 'staff', label: 'Needs you', hint: 'Staff', onSelect: () => navigate('/staff') },
       { id: 'data', label: 'Open data', onSelect: () => navigate('/data') },
+      { id: 'records', label: 'Public records requests', onSelect: () => navigate('/records') },
       { id: 'boards', label: 'Boards and seats', onSelect: () => navigate('/staff/boards') },
     ].filter((item) => item.label.toLowerCase().includes(query.toLowerCase()));
     return [...actions, ...meetings];
@@ -118,12 +122,14 @@ export function App() {
         <Route path="/notices" element={<Shell><NoticesPage region={region.data} /></Shell>} />
         <Route path="/account" element={<Shell><AccountPage /></Shell>} />
         <Route path="/data" element={<Shell><DataPage /></Shell>} />
+        <Route path="/records" element={<Shell><RecordsPage region={region.data} /></Shell>} />
         <Route path="/staff" element={<Shell staff><StaffHome /></Shell>} />
         <Route path="/staff/meetings/:id" element={<Shell staff><StaffMeetingPage /></Shell>} />
         <Route path="/staff/items/:id/edit" element={<Shell staff><ItemEditPage /></Shell>} />
         <Route path="/staff/live/:meetingId" element={<Shell staff><LivePage /></Shell>} />
         <Route path="/staff/minutes/:meetingId" element={<Shell staff><MinutesPage /></Shell>} />
         <Route path="/staff/boards" element={<Shell staff><BoardsPage /></Shell>} />
+        <Route path="/staff/records" element={<Shell staff><StaffRecordsPage /></Shell>} />
         <Route path="/staff/insights" element={<Shell staff><InsightsPage /></Shell>} />
         <Route path="/staff/compliance" element={<Shell staff><CompliancePage /></Shell>} />
         <Route path="/staff/imports" element={<Shell staff><ImportsPage region={region.data} /></Shell>} />
