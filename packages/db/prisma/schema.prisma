@@ -1,0 +1,828 @@
+// Referendum data model. Jurisdiction-specific values are configuration, not constants.
+// SPEC-GAP fields are marked inline. createdAt/updatedAt are on every model.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, postgis]
+}
+
+enum ModuleKey {
+  MEETINGS
+  ASK
+  NOTIFY
+  PARTICIPATION
+  LIVE
+  MINUTES_AI
+  BOARDS
+  RECORDS
+  SERVICES
+  EMBEDS
+}
+
+enum StaffRole {
+  ADMIN
+  CLERK
+  DEPUTY_CLERK
+  STAFF
+  REVIEWER
+  MEMBER
+  CHAIR
+  VIEWER
+}
+
+enum MeetingStatus {
+  DRAFT
+  NOTICED
+  PACKET_PUBLISHED
+  IN_PROGRESS
+  RECESSED
+  ADJOURNED
+  MINUTES_DRAFT
+  MINUTES_ADOPTED
+  CANCELLED
+}
+
+enum ItemType {
+  CONSENT
+  PUBLIC_HEARING
+  NEW_BUSINESS
+  UNFINISHED_BUSINESS
+  REPORT
+  PRESENTATION
+  CORRESPONDENCE
+  OTHER
+}
+
+enum ItemStatus {
+  DRAFT
+  IN_REVIEW
+  READY
+  PUBLISHED
+  HEARD
+  CONTINUED
+  WITHDRAWN
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  RETURNED
+  SKIPPED
+}
+
+enum Position {
+  SUPPORT
+  OPPOSE
+  NEUTRAL
+}
+
+enum TestimonyMode {
+  IN_PERSON
+  PHONE
+}
+
+enum VoteValue {
+  YES
+  NO
+  ABSTAIN
+  ABSENT
+  RECUSED
+}
+
+enum SubscriptionKind {
+  MATTER
+  BODY
+  ADDRESS
+  DIGEST
+  TOPIC
+}
+
+enum Channel {
+  EMAIL
+  SMS
+}
+
+enum Lang {
+  EN
+  TL
+  ES
+}
+
+model Region {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  governments Government[]
+  residents   Resident[]
+  askQueries  AskQuery[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Government {
+  id                     String             @id @default(cuid())
+  regionId               String
+  region                 Region             @relation(fields: [regionId], references: [id])
+  name                   String
+  shortName              String
+  colorToken             String
+  timezone               String             @default("America/Anchorage")
+  bodies                 Body[]
+  modules                GovernmentModule[]
+  noticeRules            NoticeRule[]
+  matters                Matter[]
+  parcels                Parcel[]
+  memberships            Membership[]
+  retentionRules         RetentionRule[]
+  importJobs             ImportJob[]
+  appointedSeats         Seat[]             @relation("AppointingGovernment")
+  auditLogs              AuditLog[]
+  outboundMessages       OutboundMessage[]
+  jobFailures            JobFailure[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([regionId])
+}
+
+model GovernmentModule {
+  id           String     @id @default(cuid())
+  governmentId String
+  government   Government @relation(fields: [governmentId], references: [id])
+  module       ModuleKey
+  enabled      Boolean    @default(true)
+  // §3.3 window. Null means no start/end bound.
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([governmentId, module])
+}
+
+model Body {
+  id              String       @id @default(cuid())
+  governmentId    String
+  government      Government   @relation(fields: [governmentId], references: [id])
+  name            String
+  code            String
+  defaultLocation String?
+  // SPEC-GAP: speaker timer default is configurable per body; 180s matches §8.5.
+  speakerSeconds  Int          @default(180)
+  seats           Seat[]
+  meetings        Meeting[]
+  matterEvents    MatterEvent[]
+  subscriptions   Subscription[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([governmentId, code])
+}
+
+model Seat {
+  id                     String             @id @default(cuid())
+  bodyId                 String
+  body                   Body               @relation(fields: [bodyId], references: [id])
+  label                  String
+  appointingGovernmentId String?
+  appointingGovernment   Government?        @relation("AppointingGovernment", fields: [appointingGovernmentId], references: [id])
+  appointmentNotes       String?
+  terms                  Term[]
+  applications           BoardApplication[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([bodyId])
+}
+
+model Person {
+  id                 String                @id @default(cuid())
+  fullName           String
+  email              String?
+  phone              String?
+  terms              Term[]
+  motionsMoved       Motion[]              @relation("Mover")
+  motionsSeconded    Motion[]              @relation("Seconder")
+  votes              Vote[]
+  conflicts          ConflictDeclaration[]
+  staffQuestions     StaffQuestion[]
+  memberships        Membership[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+}
+
+model Term {
+  id        String    @id @default(cuid())
+  seatId    String
+  seat      Seat      @relation(fields: [seatId], references: [id])
+  personId  String
+  person    Person    @relation(fields: [personId], references: [id])
+  startsOn  DateTime
+  endsOn    DateTime?
+  isChair   Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([seatId, endsOn])
+}
+
+model Meeting {
+  id                 String        @id @default(cuid())
+  bodyId             String
+  body               Body          @relation(fields: [bodyId], references: [id])
+  startsAt           DateTime
+  location           String?
+  status             MeetingStatus @default(DRAFT)
+  noticePostedAt     DateTime?
+  packetPublishedAt  DateTime?
+  videoProvider      String?
+  videoRef           String?
+  recordingStartedAt DateTime?
+  items              AgendaItem[]
+  // Scalar on purpose: a relation would cycle with AgendaItem.
+  currentItemId      String?
+  matterEvents       MatterEvent[]
+  liveTimer          LiveTimer?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([startsAt])
+  @@index([bodyId])
+}
+
+model Matter {
+  id                       String         @id @default(cuid())
+  governmentId             String
+  government               Government     @relation(fields: [governmentId], references: [id])
+  title                    String
+  caseNumber               String?
+  kind                     String
+  summaryEn                String?
+  // SPEC-GAP: staff must accept AI summaries before they are public (§4, §9.2).
+  summaryApprovedByUserId  String?
+  summaryApprovedBy        User?          @relation("SummaryApprover", fields: [summaryApprovedByUserId], references: [id])
+  items                    AgendaItem[]
+  events                   MatterEvent[]
+  parcels                  MatterParcel[]
+  documents                Document[]
+  redlines                 Redline[]
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  @@index([governmentId, caseNumber])
+}
+
+model MatterEvent {
+  id           String    @id @default(cuid())
+  matterId     String
+  matter       Matter    @relation(fields: [matterId], references: [id])
+  label        String
+  bodyId       String?
+  body         Body?     @relation(fields: [bodyId], references: [id])
+  meetingId    String?
+  meeting      Meeting?  @relation(fields: [meetingId], references: [id])
+  occurredAt   DateTime?
+  projectedFor DateTime?
+  order        Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([matterId, order])
+}
+
+model AgendaItem {
+  id              String                @id @default(cuid())
+  meetingId       String
+  meeting         Meeting               @relation(fields: [meetingId], references: [id])
+  matterId        String?
+  matter          Matter?               @relation(fields: [matterId], references: [id])
+  position        String
+  sortKey         Int
+  type            ItemType
+  title           String
+  status          ItemStatus            @default(DRAFT)
+  commentsCloseAt DateTime?
+  testimonyOpen   Boolean               @default(false)
+  videoOffsetSec  Int?
+  // SPEC-GAP: STAFF may edit only their own items (§5).
+  authorUserId    String?
+  author          User?                 @relation("ItemAuthor", fields: [authorUserId], references: [id])
+  documents       Document[]
+  reviews         ReviewStep[]
+  comments        PublicComment[]
+  speakers        SpeakerSignup[]
+  motions         Motion[]
+  conflicts       ConflictDeclaration[]
+  staffQuestions  StaffQuestion[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([meetingId, sortKey])
+  @@index([matterId])
+}
+
+model ReviewStep {
+  id            String       @id @default(cuid())
+  agendaItemId  String
+  agendaItem    AgendaItem   @relation(fields: [agendaItemId], references: [id])
+  order         Int
+  roleLabel     String
+  assigneeUserId String?
+  assignee      User?        @relation("ReviewAssignee", fields: [assigneeUserId], references: [id])
+  status        ReviewStatus @default(PENDING)
+  receivedAt    DateTime?
+  decidedAt     DateTime?
+  note          String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([agendaItemId, order])
+  @@index([assigneeUserId])
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  agendaItemId String?
+  agendaItem   AgendaItem?    @relation(fields: [agendaItemId], references: [id])
+  matterId     String?
+  matter       Matter?        @relation(fields: [matterId], references: [id])
+  title        String
+  kind         String
+  version      Int            @default(1)
+  storageKey   String
+  pageCount    Int?
+  ocrUsed      Boolean        @default(false)
+  accessible   Boolean        @default(false)
+  pages        DocumentPage[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([agendaItemId])
+  @@index([matterId])
+}
+
+model DocumentPage {
+  id         String          @id @default(cuid())
+  documentId String
+  document   Document        @relation(fields: [documentId], references: [id])
+  pageNumber Int
+  html       String
+  text       String
+  chunks     DocumentChunk[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([documentId, pageNumber])
+}
+
+model DocumentChunk {
+  id        String                     @id @default(cuid())
+  pageId    String
+  page      DocumentPage               @relation(fields: [pageId], references: [id])
+  ordinal   Int
+  text      String
+  embedding Unsupported("vector(1024)")?
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
+
+  @@index([pageId])
+}
+
+model Redline {
+  id             String   @id @default(cuid())
+  matterId       String
+  matter         Matter   @relation(fields: [matterId], references: [id])
+  fromDocumentId String
+  toDocumentId   String
+  diffJson       Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([matterId])
+}
+
+model PublicComment {
+  id            String     @id @default(cuid())
+  agendaItemId  String
+  agendaItem    AgendaItem @relation(fields: [agendaItemId], references: [id])
+  residentId    String?
+  resident      Resident?  @relation(fields: [residentId], references: [id])
+  name          String
+  address       String?
+  position      Position   @default(NEUTRAL)
+  body          String
+  receivedAt    DateTime   @default(now())
+  onTime        Boolean
+  publishedAt   DateTime?
+  hidden        Boolean    @default(false)
+  hiddenReason  String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([agendaItemId])
+}
+
+model SpeakerSignup {
+  id                String        @id @default(cuid())
+  agendaItemId      String
+  agendaItem        AgendaItem    @relation(fields: [agendaItemId], references: [id])
+  residentId        String?
+  resident          Resident?     @relation(fields: [residentId], references: [id])
+  displayName       String
+  mode              TestimonyMode
+  phone             String?
+  queuePosition     Int
+  calledAt          DateTime?
+  spokeSeconds      Int?
+  notifiedTwoAway   Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([agendaItemId, queuePosition])
+}
+
+model Motion {
+  id                 String     @id @default(cuid())
+  agendaItemId       String
+  agendaItem         AgendaItem @relation(fields: [agendaItemId], references: [id])
+  text               String
+  moverPersonId      String?
+  mover              Person?    @relation("Mover", fields: [moverPersonId], references: [id])
+  seconderPersonId   String?
+  seconder           Person?    @relation("Seconder", fields: [seconderPersonId], references: [id])
+  result             String?
+  source             String
+  acceptedByUserId   String?
+  acceptedBy         User?      @relation("MotionAcceptor", fields: [acceptedByUserId], references: [id])
+  transcriptStartSec Int?
+  votes              Vote[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([agendaItemId])
+}
+
+model Vote {
+  id         String    @id @default(cuid())
+  motionId   String
+  motion     Motion    @relation(fields: [motionId], references: [id])
+  personId   String
+  person     Person    @relation(fields: [personId], references: [id])
+  value      VoteValue
+  confidence Float?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([motionId, personId])
+}
+
+model ConflictDeclaration {
+  id           String     @id @default(cuid())
+  agendaItemId String
+  agendaItem   AgendaItem @relation(fields: [agendaItemId], references: [id])
+  personId     String
+  person       Person     @relation(fields: [personId], references: [id])
+  statement    String
+  chairRuling  String?
+  declaredAt   DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([agendaItemId])
+}
+
+model Resident {
+  id            String         @id @default(cuid())
+  regionId      String
+  region        Region         @relation(fields: [regionId], references: [id])
+  email         String?        @unique
+  phone         String?        @unique
+  lang          Lang           @default(EN)
+  subscriptions Subscription[]
+  comments      PublicComment[]
+  speakers      SpeakerSignup[]
+  applications  BoardApplication[]
+  sessions      Session[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Subscription {
+  id          String           @id @default(cuid())
+  residentId  String
+  resident    Resident         @relation(fields: [residentId], references: [id])
+  kind        SubscriptionKind
+  matterId    String?
+  bodyId      String?
+  body        Body?            @relation(fields: [bodyId], references: [id])
+  address     String?
+  point       Unsupported("geography(Point,4326)")?
+  radiusFt    Int?
+  channels    Channel[]
+  confirmedAt DateTime?
+  topic       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([residentId])
+  @@index([matterId])
+  @@index([kind])
+}
+
+model Parcel {
+  id            String         @id @default(cuid())
+  governmentId  String
+  government    Government     @relation(fields: [governmentId], references: [id])
+  parcelNumber  String
+  situsAddress  String?
+  geom          Unsupported("geography(MultiPolygon,4326)")?
+  matters       MatterParcel[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([governmentId, parcelNumber])
+}
+
+model MatterParcel {
+  matterId  String
+  matter    Matter   @relation(fields: [matterId], references: [id])
+  parcelId  String
+  parcel    Parcel   @relation(fields: [parcelId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([matterId, parcelId])
+}
+
+model NoticeRule {
+  id            String     @id @default(cuid())
+  governmentId  String
+  government    Government @relation(fields: [governmentId], references: [id])
+  bodyId        String?
+  itemType      ItemType?
+  daysBefore    Int?
+  codeCitation  String?
+  mailedRadiusFt Int?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([governmentId])
+}
+
+model Translation {
+  id               String   @id @default(cuid())
+  entityType       String
+  entityId         String
+  field            String
+  lang             Lang
+  text             String
+  reviewedByUserId String?
+  reviewer         User?    @relation("TranslationReviewer", fields: [reviewedByUserId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([entityType, entityId, field, lang])
+}
+
+model AskQuery {
+  id           String   @id @default(cuid())
+  regionId     String
+  region       Region   @relation(fields: [regionId], references: [id])
+  matterId     String?
+  question     String
+  answer       String?
+  citedPageIds String[]
+  answered     Boolean
+  latencyMs    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([regionId, createdAt])
+  @@index([matterId])
+}
+
+model StaffQuestion {
+  id               String     @id @default(cuid())
+  agendaItemId     String
+  agendaItem       AgendaItem @relation(fields: [agendaItemId], references: [id])
+  askedByPersonId  String
+  askedBy          Person     @relation(fields: [askedByPersonId], references: [id])
+  question         String
+  answer           String?
+  answeredByUserId String?
+  answeredBy       User?      @relation("QuestionAnswerer", fields: [answeredByUserId], references: [id])
+  distributedAt    DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([agendaItemId])
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  name               String
+  // SPEC-GAP: password storage is required for staff email/password auth.
+  passwordHash       String?
+  totpSecret         String?
+  memberships        Membership[]
+  sessions           Session[]
+  authoredItems      AgendaItem[] @relation("ItemAuthor")
+  reviewAssignments  ReviewStep[] @relation("ReviewAssignee")
+  acceptedMotions    Motion[]     @relation("MotionAcceptor")
+  answeredQuestions  StaffQuestion[] @relation("QuestionAnswerer")
+  reviewedTranslations Translation[] @relation("TranslationReviewer")
+  approvedSummaries  Matter[]     @relation("SummaryApprover")
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Membership {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  governmentId String
+  government   Government @relation(fields: [governmentId], references: [id])
+  role         StaffRole
+  personId     String?
+  person       Person?    @relation(fields: [personId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([userId, governmentId])
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  governmentId    String?
+  government      Government? @relation(fields: [governmentId], references: [id])
+  actorUserId     String?
+  actorResidentId String?
+  action          String
+  entityType      String
+  entityId        String
+  before          Json?
+  after           Json?
+  at              DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([governmentId, at])
+}
+
+model ImportJob {
+  id           String     @id @default(cuid())
+  governmentId String
+  government   Government @relation(fields: [governmentId], references: [id])
+  source       String
+  status       String
+  stats        Json?
+  error        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([governmentId])
+}
+
+model RetentionRule {
+  id           String     @id @default(cuid())
+  governmentId String
+  government   Government @relation(fields: [governmentId], references: [id])
+  documentKind String
+  retainYears  Int?
+  citation     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([governmentId, documentKind])
+}
+
+// SPEC-GAP: sessions are not in §4. Needed for staff and resident auth.
+model Session {
+  id          String    @id @default(cuid())
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  residentId  String?
+  resident    Resident? @relation(fields: [residentId], references: [id])
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([residentId])
+}
+
+// SPEC-GAP: one-time codes for magic links, SMS login, TOTP challenges, and confirmations.
+model OneTimeCode {
+  id          String    @id @default(cuid())
+  channel     Channel
+  destination String
+  codeHash    String
+  purpose     String
+  userId      String?
+  residentId  String?
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([destination, purpose])
+}
+
+// SPEC-GAP: outbound log gives send idempotency (subscriptionId:eventId) and tests a receipt.
+model OutboundMessage {
+  id              String     @id @default(cuid())
+  governmentId    String?
+  government      Government? @relation(fields: [governmentId], references: [id])
+  idempotencyKey  String     @unique
+  channel         Channel
+  destination     String
+  subject         String?
+  body            String
+  status          String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+// SPEC-GAP: dead-letter rows back the admin view of failed jobs (§7).
+model JobFailure {
+  id           String      @id @default(cuid())
+  queue        String
+  jobId        String
+  governmentId String?
+  government   Government? @relation(fields: [governmentId], references: [id])
+  meetingId    String?
+  payload      Json?
+  error        String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([queue, createdAt])
+}
+
+// SPEC-GAP: §9.4 stores prompts and outputs with request ids. Question text is already scrubbed.
+model AiAudit {
+  id           String   @id @default(cuid())
+  requestId    String
+  governmentId String?
+  feature      String
+  model        String
+  promptText   String
+  outputText   String?
+  inputTokens  Int?
+  outputTokens Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([requestId])
+  @@index([feature, createdAt])
+}
+
+// SPEC-GAP: server-side speaker timer so multiple consoles stay in sync (§8.5).
+model LiveTimer {
+  meetingId    String    @id
+  meeting      Meeting   @relation(fields: [meetingId], references: [id])
+  running      Boolean   @default(false)
+  durationSec  Int       @default(180)
+  remainingMs  Int       @default(180000)
+  runningSince DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// SPEC-GAP: board applications are required by M7 and are not in the §4 models.
+model BoardApplication {
+  id         String    @id @default(cuid())
+  seatId     String
+  seat       Seat      @relation(fields: [seatId], references: [id])
+  residentId String?
+  resident   Resident? @relation(fields: [residentId], references: [id])
+  name       String
+  email      String
+  statement  String
+  status     String    @default("received")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([seatId])
+}
+
+// SPEC-GAP: normalized ask cache (question + matter, 1 hour) without Redis as the source of truth.
+model AskCache {
+  id         String   @id @default(cuid())
+  cacheKey   String   @unique
+  matterId   String?
+  response   Json
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
